@@ -98,9 +98,18 @@
     <!-- РЕЗУЛЬТАТ -->
     <div id="result">
         <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap: wrap;">
-            <button class="btn btn-green" style="flex:1; min-width: 120px;" onclick="downloadTierList()">📥 PNG</button>
-            <button class="btn btn-gray" style="flex:1; min-width: 120px;" onclick="exportJSON()">📄 HTML</button>
-            <button class="btn btn-gray" style="flex:1; min-width: 120px;" onclick="shareLink()">🔗 ССЫЛКА</button>
+            <button class="btn btn-green" style="flex:1; min-width: 100px;" onclick="downloadTierList()">📥 PNG</button>
+            <button class="btn btn-gray" style="flex:1; min-width: 100px;" onclick="exportHTML()">📄 HTML</button>
+            <button class="btn btn-gray" style="flex:1; min-width: 100px;" onclick="copyAsText()">📋 ТЕКСТ</button>
+        </div>
+        
+        <div style="background: var(--card); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px;">🔗 Поделиться ссылкой:</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="text" id="shareUrl" readonly style="margin: 0; font-size: 12px; flex: 1;" placeholder="Генерирую ссылку...">
+                <button class="btn btn-gray" style="width: 80px; margin: 0;" onclick="copyShareUrl()">COPY</button>
+            </div>
+            <button class="btn btn-green" onclick="shareNative()" style="margin: 0;">📤 ПОДЕЛИТЬСЯ</button>
         </div>
 
         <div id="final-board" class="tier-board">
@@ -317,6 +326,112 @@
             
             document.getElementById('finalTitle').innerText = boardTitle;
             document.getElementById('finalRows').innerHTML = boardHTML;
+            
+            // Генерируем ссылку для шаринга
+            generateShareUrl();
+        }
+
+        // Генерация ссылки для шаринга
+        function generateShareUrl() {
+            try {
+                const data = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+                const baseUrl = window.location.origin;
+                const shareUrl = baseUrl + window.location.pathname + "?d=" + data;
+                document.getElementById('shareUrl').value = shareUrl;
+            } catch (error) {
+                document.getElementById('shareUrl').value = 'Ошибка генерации ссылки';
+            }
+        }
+
+        // Копирование ссылки
+        async function copyShareUrl() {
+            const urlInput = document.getElementById('shareUrl');
+            const url = urlInput.value;
+            
+            if (url.includes('Ошибка')) {
+                showToast('Невозможно создать ссылку', true);
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(url);
+                    showToast('✅ Ссылка скопирована!');
+                } else {
+                    // Fallback для старых браузеров
+                    urlInput.select();
+                    urlInput.setSelectionRange(0, 99999);
+                    document.execCommand('copy');
+                    showToast('✅ Ссылка скопирована!');
+                }
+            } catch (error) {
+                showToast('Ошибка копирования', true);
+            }
+        }
+
+        // Нативный шаринг
+        async function shareNative() {
+            const url = document.getElementById('shareUrl').value;
+            
+            if (url.includes('Ошибка')) {
+                showToast('Невозможно поделиться', true);
+                return;
+            }
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: config.title || 'Tier List',
+                        text: 'Посмотри мой Tier List!',
+                        url: url
+                    });
+                    showToast('✅ Отправлено!');
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        showToast('Ошибка отправки', true);
+                    }
+                }
+            } else {
+                copyShareUrl();
+            }
+        }
+
+        // Копирование как текст
+        async function copyAsText() {
+            try {
+                let text = `📊 ${config.title}\n\n`;
+                
+                // Собираем текст из финального тир-листа
+                const rows = document.querySelectorAll('#finalRows .tier-row');
+                rows.forEach(row => {
+                    const label = row.querySelector('.tier-label').textContent.trim();
+                    const content = row.querySelector('.tier-content');
+                    const images = content.querySelectorAll('.card-img');
+                    
+                    if (images.length > 0) {
+                        text += `${label}: ${images.length} фото\n`;
+                    }
+                });
+                
+                text += `\n🔗 Ссылка: ${document.getElementById('shareUrl').value}`;
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                    showToast('✅ Текст скопирован!');
+                } else {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showToast('✅ Текст скопирован!');
+                }
+            } catch (error) {
+                showToast('Ошибка копирования', true);
+            }
         }
 
         // Сброс приложения
@@ -331,7 +446,7 @@
         }
 
         // --- ЭКСПОРТ В HTML (полноценный тир-лист) ---
-        async function exportJSON() {
+        async function exportHTML() {
             try {
                 showToast('Создаю HTML файл...');
                 
