@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPhone Tier Maker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root { --bg: #000; --card: #1c1c1e; --accent: #32d74b; --text: #fff; --border: #38383a; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
+        
+        /* Стили контейнеров */
+        .box { background: var(--card); padding: 15px; border-radius: 15px; border: 1px solid var(--border); margin-bottom: 15px; }
+        input[type="text"] { background: #2c2c2e; border: 1px solid var(--border); color: #fff; padding: 12px; border-radius: 10px; width: 100%; box-sizing: border-box; font-size: 16px; margin-bottom: 10px; }
+        
+        .btn { padding: 14px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; font-size: 14px; width: 100%; }
+        .btn-green { background: var(--accent); color: #000; margin-top: 10px; }
+        .btn-gray { background: #2c2c2e; color: #fff; border: 1px dashed #555; }
+        
+        /* Доска */
+        .tier-board { background: #000; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .tier-row { display: flex; min-height: 85px; border-bottom: 1px solid var(--border); }
+        .tier-label { width: 70px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000; text-align: center; font-size: 11px; text-transform: uppercase; padding: 4px; }
+        .tier-content { flex: 1; background: #121212; display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; min-height: 85px; }
+        
+        .card-img { width: 65px; height: 65px; object-fit: cover; border-radius: 4px; border: 1px solid #333; }
+
+        /* Управление на iPhone */
+        .controls { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(28,28,30,0.9); backdrop-filter: blur(15px); padding: 10px 20px; border-radius: 40px; display: flex; align-items: center; gap: 15px; border: 1px solid var(--border); z-index: 100; }
+        .deck { width: 50px; height: 70px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #000; }
+        .slot { width: 65px; height: 65px; border: 2px dashed #444; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+
+        /* Цвета */
+        .c0 { background: #ff3b30; } .c1 { background: #ff9500; } .c2 { background: #ffcc00; }
+        .c3 { background: #34c759; } .c4 { background: #007aff; } .c5 { background: #af52de; }
+
+        .modal { position: fixed; inset: 0; background: #000; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .modal img { max-width: 80%; border-radius: 12px; border: 3px solid #fff; }
+        
+        #editor { display: block; }
+        #game { display: none; }
+
+        /* Toast notification */
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(50, 215, 75, 0.95); color: #000; padding: 12px 24px; border-radius: 25px; font-weight: 600; z-index: 2000; display: none; backdrop-filter: blur(10px); }
+        .toast.error { background: rgba(255, 59, 48, 0.95); color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div id="toast" class="toast"></div>
+
+    <div id="editor">
+        <div class="box">
+            <h2>Настрой тиры</h2>
+            <input type="text" id="titleInp" placeholder="Название тир-листа">
+            <div id="tiersEdit"></div>
+            <button class="btn btn-gray" onclick="addTier()">+ Добавить категорию</button>
+        </div>
+
+        <div class="box">
+            <h2>Загрузи фото</h2>
+            <input type="file" id="fileInp" multiple accept="image/*" style="display:none">
+            <button class="btn btn-gray" style="color:var(--accent)" onclick="document.getElementById('fileInp').click()">📸 Из Медиатеки</button>
+            <div id="previewArea" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;"></div>
+        </div>
+
+        <button class="btn btn-green" onclick="startGame()">ГОТОВО, ИГРАЕМ!</button>
+    </div>
+
+    <div id="game">
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <button class="btn btn-green" style="flex:1" onclick="downloadTierList()">📥 СКАЧАТЬ</button>
+            <button class="btn btn-gray" style="flex:1" onclick="shareLink()">🔗 ПОДЕЛИТЬСЯ</button>
+        </div>
+
+        <div id="capture-board" class="tier-board">
+            <h2 id="boardTitle" style="text-align:center; padding:10px; margin:0; font-size:18px;"></h2>
+            <div id="rowsArea"></div>
+        </div>
+
+        <div class="controls">
+            <div id="deckCount" style="font-weight:bold">0</div>
+            <div class="deck" onclick="openNext()">GO</div>
+            <div class="slot" id="mainSlot" ondrop="drop(event)" ondragover="allow(event)"></div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal" onclick="closeModal()">
+        <h1 id="modalTxt" style="text-align:center; margin-bottom:15px;"></h1>
+        <img id="modalImg" src="">
+        <p style="color: #666; margin-top: 20px;">Нажми, чтобы продолжить</p>
+    </div>
+
+    <script>
+        let config = { title: "", tiers: ["S", "A", "B"], cards: [] };
+        let currentDeck = [];
+        let activeCard = null;
+
+        // Toast notifications
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        // Категории
+        function addTier() { config.tiers.push("New"); renderTiers(); }
+        function renderTiers() {
+            const area = document.getElementById('tiersEdit');
+            area.innerHTML = '';
+            config.tiers.forEach((t, i) => {
+                area.innerHTML += `<div style="display:flex; gap:5px; margin-bottom:5px">
+                    <input type="text" value="${t}" oninput="config.tiers[${i}]=this.value" style="margin:0">
+                    <button class="btn btn-gray" style="width:45px" onclick="config.tiers.splice(${i},1); renderTiers()">✕</button>
+                </div>`;
+            });
+        }
+        renderTiers();
+
+        // Загрузка фото
+        document.getElementById('fileInp').onchange = function(e) {
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const card = { src: ev.target.result, text: "" };
+                    config.cards.push(card);
+                    const div = document.createElement('div');
+                    div.style.width="60px";
+                    div.innerHTML = `<img src="${card.src}" style="width:60px;height:60px;object-fit:cover;border-radius:8px">
+                    <input type="text" placeholder="Текст" oninput="card.text=this.value" style="font-size:10px; padding:3px; margin:0">`;
+                    document.getElementById('previewArea').appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
+        function startGame() {
+            config.title = document.getElementById('titleInp').value || "Tier List";
+            
+            // Создаем ссылку с данными
+            const data = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+            const newUrl = window.location.origin + window.location.pathname + "?d=" + data;
+            
+            // Обновляем URL без перезагрузки страницы
+            window.history.pushState({ path: newUrl }, '', newUrl);
+            
+            document.getElementById('editor').style.display = 'none';
+            document.getElementById('game').style.display = 'block';
+            document.getElementById('boardTitle').innerText = config.title;
+            
+            const area = document.getElementById('rowsArea');
+            area.innerHTML = '';
+            config.tiers.forEach((t, i) => {
+                area.innerHTML += `<div class="tier-row">
+                    <div class="tier-label c${i%6}">${t}</div>
+                    <div class="tier-content" ondrop="drop(event)" ondragover="allow(event)"></div>
+                </div>`;
+            });
+            currentDeck = [...config.cards];
+            document.getElementById('deckCount').innerText = currentDeck.length;
+            
+            showToast('Ссылка обновлена! Можно делиться');
+        }
+
+        function openNext() {
+            if(!currentDeck.length) return;
+            activeCard = currentDeck.shift();
+            document.getElementById('deckCount').innerText = currentDeck.length;
+            document.getElementById('modalImg').src = activeCard.src;
+            document.getElementById('modalTxt').innerText = activeCard.text;
+            document.getElementById('modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+            const img = document.createElement('img');
+            img.src = activeCard.src; img.className = 'card-img'; img.id = 'img'+Date.now();
+            img.draggable = true;
+            img.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
+            document.getElementById('mainSlot').innerHTML = '';
+            document.getElementById('mainSlot').appendChild(img);
+        }
+
+        function allow(e) { e.preventDefault(); }
+        function drop(e) {
+            e.preventDefault();
+            const id = e.dataTransfer.getData("text");
+            const el = document.getElementById(id);
+            let target = e.target;
+            while(target && !target.classList.contains('tier-content') && !target.classList.contains('slot')) target = target.parentElement;
+            if(target) target.appendChild(el);
+        }
+
+        // --- УЛУЧШЕННОЕ СКАЧИВАНИЕ ДЛЯ iOS ---
+        async function downloadTierList() {
+            try {
+                const board = document.getElementById('capture-board');
+                
+                // Генерируем изображение
+                const canvas = await html2canvas(board, { 
+                    backgroundColor: "#000",
+                    scale: 3, 
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: true
+                });
+
+                // Конвертируем canvas в blob
+                canvas.toBlob(async (blob) => {
+                    if (!blob) {
+                        showToast('Ошибка создания изображения', true);
+                        return;
+                    }
+
+                    // Проверяем поддержку Web Share API (работает на iOS Safari)
+                    if (navigator.share && navigator.canShare) {
+                        try {
+                            const file = new File([blob], `TierList-${Date.now()}.png`, { type: 'image/png' });
+                            
+                            if (navigator.canShare({ files: [file] })) {
+                                await navigator.share({
+                                    files: [file],
+                                    title: config.title || 'Tier List',
+                                    text: 'Мой Tier List'
+                                });
+                                showToast('Изображение сохранено!');
+                                return;
+                            }
+                        } catch (err) {
+                            if (err.name !== 'AbortError') {
+                                console.log('Share API error:', err);
+                            }
+                        }
+                    }
+
+                    // Fallback: прямое скачивание
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `TierList-${Date.now()}.png`;
+                    
+                    // Для iOS: создаем событие клика
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    // Очистка
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                    }, 100);
+                    
+                    showToast('Нажмите "Скачать" в браузере');
+                }, 'image/png', 1.0);
+
+            } catch (error) {
+                console.error('Download error:', error);
+                showToast('Ошибка при скачивании', true);
+            }
+        }
+
+        // --- УЛУЧШЕННЫЙ ШАРИНГ ССЫЛКОЙ ---
+        async function shareLink() {
+            try {
+                // Создаем данные для ссылки
+                const data = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+                
+                // ВАЖНО: Замените YOUR-APP-NAME на имя вашего проекта на Vercel
+                // Например: https://tier-maker.vercel.app
+                const baseUrl = window.location.origin.includes('vercel.app') 
+                    ? window.location.origin 
+                    : 'https://YOUR-APP-NAME.vercel.app';
+                
+                const url = baseUrl + window.location.pathname + "?d=" + data;
+
+                // Используем Web Share API если доступен (iOS Safari)
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: config.title || 'Tier List',
+                            text: 'Посмотри мой Tier List!',
+                            url: url
+                        });
+                        showToast('Ссылка отправлена!');
+                        return;
+                    } catch (err) {
+                        if (err.name === 'AbortError') {
+                            return; // Пользователь отменил
+                        }
+                    }
+                }
+
+                // Fallback: копирование в буфер обмена
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(url);
+                    showToast('Ссылка скопирована!');
+                } else {
+                    // Старый метод для iOS < 13.4
+                    const textArea = document.createElement('textarea');
+                    textArea.value = url;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        showToast('Ссылка скопирована!');
+                    } catch (err) {
+                        showToast('Не удалось скопировать', true);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                }
+            } catch (error) {
+                console.error('Share error:', error);
+                showToast('Ошибка при создании ссылки', true);
+            }
+        }
+
+        // Загрузка по ссылке
+        window.onload = () => {
+            const p = new URLSearchParams(window.location.search);
+            if(p.has('d')) {
+                try {
+                    config = JSON.parse(decodeURIComponent(escape(atob(p.get('d')))));
+                    startGame();
+                } catch (error) {
+                    console.error('Error loading shared data:', error);
+                    showToast('Ошибка загрузки данных', true);
+                }
+            }
+        };
+    </script>
+</body>
+</html>
