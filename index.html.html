@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>iPhone Tier Maker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
         :root { --bg: #000; --card: #1c1c1e; --accent: #32d74b; --text: #fff; --border: #38383a; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; margin: 0; padding: 10px; }
@@ -334,12 +335,26 @@
         // Генерация ссылки для шаринга
         function generateShareUrl() {
             try {
-                const data = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
+                const jsonString = JSON.stringify(config);
+                
+                // Сжимаем данные с помощью LZ-String
+                const compressed = LZString.compressToEncodedURIComponent(jsonString);
+                
                 const baseUrl = window.location.origin;
-                const shareUrl = baseUrl + window.location.pathname + "?d=" + data;
-                document.getElementById('shareUrl').value = shareUrl;
+                const shareUrl = baseUrl + window.location.pathname + "?d=" + compressed;
+                
+                // Проверяем длину ссылки
+                if (shareUrl.length > 8000) {
+                    document.getElementById('shareUrl').value = '⚠️ Слишком много фото для ссылки';
+                    document.getElementById('shareUrl').placeholder = 'Используй PNG или HTML файл';
+                    showToast('⚠️ Слишком большой тир-лист для ссылки', true);
+                } else {
+                    document.getElementById('shareUrl').value = shareUrl;
+                }
             } catch (error) {
-                document.getElementById('shareUrl').value = 'Ошибка генерации ссылки';
+                console.error('Share URL error:', error);
+                document.getElementById('shareUrl').value = '⚠️ Ошибка создания ссылки';
+                document.getElementById('shareUrl').placeholder = 'Используй PNG или HTML файл';
             }
         }
 
@@ -348,8 +363,8 @@
             const urlInput = document.getElementById('shareUrl');
             const url = urlInput.value;
             
-            if (url.includes('Ошибка')) {
-                showToast('Невозможно создать ссылку', true);
+            if (url.includes('⚠️') || url.includes('Ошибка')) {
+                showToast('❌ Ссылка недоступна. Используй PNG или HTML', true);
                 return;
             }
 
@@ -373,8 +388,8 @@
         async function shareNative() {
             const url = document.getElementById('shareUrl').value;
             
-            if (url.includes('Ошибка')) {
-                showToast('Невозможно поделиться', true);
+            if (url.includes('⚠️') || url.includes('Ошибка')) {
+                showToast('❌ Ссылка недоступна. Используй PNG или HTML', true);
                 return;
             }
 
@@ -759,14 +774,29 @@
             const p = new URLSearchParams(window.location.search);
             if(p.has('d')) {
                 try {
-                    config = JSON.parse(decodeURIComponent(escape(atob(p.get('d')))));
+                    const compressed = p.get('d');
+                    
+                    // Пробуем декомпрессию с LZ-String
+                    let jsonString;
+                    try {
+                        jsonString = LZString.decompressFromEncodedURIComponent(compressed);
+                    } catch (e) {
+                        // Fallback на старый формат base64
+                        jsonString = decodeURIComponent(escape(atob(compressed)));
+                    }
+                    
+                    if (!jsonString) {
+                        throw new Error('Не удалось декодировать данные');
+                    }
+                    
+                    config = JSON.parse(jsonString);
                     document.getElementById('titleInp').value = config.title;
                     renderTiers();
                     renderPreview();
-                    showToast('Tier List загружен из ссылки!');
+                    showToast('✅ Tier List загружен из ссылки!');
                 } catch (error) {
                     console.error('Error loading shared data:', error);
-                    showToast('Ошибка загрузки данных', true);
+                    showToast('❌ Ошибка загрузки. Ссылка повреждена или устарела', true);
                 }
             }
         };
